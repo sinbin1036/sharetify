@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import MusicResultCard, {
   type MusicResult,
@@ -43,6 +43,16 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [query, setQuery] = useState<string | null>(null);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    function handleScroll() {
+      setIsScrolled(window.scrollY > 200);
+    }
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -120,6 +130,21 @@ export default function Home() {
           </section>
         )}
       </div>
+
+      {query && (
+        <button
+          type="button"
+          aria-label="맨 위로 이동"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className={`fixed right-6 top-1/2 z-20 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur-md transition-all duration-300 hover:bg-white/20 ${
+            isScrolled
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0"
+          }`}
+        >
+          ↑
+        </button>
+      )}
     </main>
   );
 }
