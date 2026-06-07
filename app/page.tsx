@@ -112,7 +112,7 @@ export default function Home() {
               어울리는 음악
             </h2>
 
-            <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {MOCK_RESULTS.map((result) => (
                 <MusicResultCard key={result.id} {...result} />
               ))}
