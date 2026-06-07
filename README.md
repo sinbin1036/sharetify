@@ -105,6 +105,20 @@ Deployment
 
 ---
 
+# 🔐 Environment Variables
+
+Create `.env.local` and set the server-side API keys:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+YOUTUBE_API_KEY=your_youtube_api_key_here
+```
+
+`.env.local` is ignored by Git. Never expose `YOUTUBE_API_KEY` in client-side code.
+
+---
+
 # 📂 Project Structure
 
 ```

@@ -6,43 +6,100 @@ import MusicResultCard, {
   type MusicResult,
 } from "./components/MusicResultCard";
 
-const MOCK_RESULTS: MusicResult[] = [
-  {
-    id: "1",
-    title: "Rainy Night Drive",
-    description: "비 오는 밤, 창밖을 보며 듣기 좋은 시티팝 모음",
-    gradient: "from-indigo-500 via-purple-500 to-pink-500",
-  },
-  {
-    id: "2",
-    title: "Lo-fi Rain Beats",
-    description: "잔잔한 빗소리와 어우러지는 로파이 비트",
-    gradient: "from-emerald-500 via-teal-500 to-cyan-500",
-  },
-  {
-    id: "3",
-    title: "Late Night Jazz",
-    description: "늦은 밤 감성을 채워주는 재즈 셀렉션",
-    gradient: "from-amber-500 via-orange-500 to-rose-500",
-  },
-  {
-    id: "4",
-    title: "Mellow Acoustic",
-    description: "차분한 어쿠스틱 사운드로 마음을 가라앉히는 플레이리스트",
-    gradient: "from-slate-500 via-slate-700 to-slate-900",
-  },
-  {
-    id: "5",
-    title: "Dreamy Synthwave",
-    description: "몽환적인 신스웨이브로 떠나는 드라이브",
-    gradient: "from-fuchsia-500 via-violet-500 to-indigo-600",
-  },
-];
+type KeywordExtractionResult = {
+  situation: string;
+  emotion: string[];
+  mood: string[];
+  environment: string[];
+  youtubeKeywords: string[];
+  finalSearchQuery: string;
+};
+
+type YouTubeSearchResponse = {
+  query: string;
+  results: MusicResult[];
+};
+
+type ErrorResponse = {
+  error?: string;
+};
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isKeywordExtractionResult(
+  value: unknown,
+): value is KeywordExtractionResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.situation === "string" &&
+    isStringArray(data.emotion) &&
+    isStringArray(data.mood) &&
+    isStringArray(data.environment) &&
+    isStringArray(data.youtubeKeywords) &&
+    typeof data.finalSearchQuery === "string"
+  );
+}
+
+function isMusicResult(value: unknown): value is MusicResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.id === "string" &&
+    typeof data.title === "string" &&
+    typeof data.description === "string" &&
+    (data.channelTitle === undefined || typeof data.channelTitle === "string") &&
+    (data.thumbnailUrl === undefined || typeof data.thumbnailUrl === "string") &&
+    (data.videoUrl === undefined || typeof data.videoUrl === "string")
+  );
+}
+
+function isYouTubeSearchResponse(
+  value: unknown,
+): value is YouTubeSearchResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return (
+    typeof data.query === "string" &&
+    Array.isArray(data.results) &&
+    data.results.every(isMusicResult)
+  );
+}
+
+function isErrorResponse(value: unknown): value is ErrorResponse {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const data = value as Record<string, unknown>;
+
+  return typeof data.error === "string";
+}
 
 export default function Home() {
   const [input, setInput] = useState("");
-  const [error, setError] = useState("");
+  const [aiError, setAiError] = useState("");
+  const [youtubeError, setYoutubeError] = useState("");
+  const [keywordResult, setKeywordResult] =
+    useState<KeywordExtractionResult | null>(null);
   const [query, setQuery] = useState<string | null>(null);
+  const [results, setResults] = useState<MusicResult[]>([]);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isYoutubeLoading, setIsYoutubeLoading] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -54,20 +111,110 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedInput = input.trim();
+    setAiError("");
+    setYoutubeError("");
 
     if (!trimmedInput) {
-      setError("상황을 입력해 주세요.");
+      setAiError("상황을 입력해 주세요.");
+      setKeywordResult(null);
       setQuery(null);
+      setResults([]);
       return;
     }
 
-    setError("");
-    setQuery(trimmedInput);
+    setIsAiLoading(true);
+    setKeywordResult(null);
+    setQuery(null);
+    setResults([]);
+
+    try {
+      const aiResponse = await fetch("/api/ai-keyword-extraction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: trimmedInput }),
+      });
+
+      const aiData: unknown = await aiResponse.json().catch(() => null);
+
+      if (!aiResponse.ok) {
+        throw new Error(
+          isErrorResponse(aiData) && aiData.error
+            ? aiData.error
+            : "키워드 생성 요청에 실패했습니다.",
+        );
+      }
+
+      if (!isKeywordExtractionResult(aiData)) {
+        throw new Error("AI 응답 JSON 형식이 올바르지 않습니다.");
+      }
+
+      const finalSearchQuery = aiData.finalSearchQuery.trim();
+      setIsAiLoading(false);
+      setKeywordResult(aiData);
+      setQuery(finalSearchQuery);
+
+      if (!finalSearchQuery) {
+        setYoutubeError("YouTube 검색어가 비어 있습니다.");
+        return;
+      }
+
+      setIsYoutubeLoading(true);
+
+      try {
+        const youtubeResponse = await fetch("/api/youtube-search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query: finalSearchQuery }),
+        });
+
+        const youtubeData: unknown = await youtubeResponse
+          .json()
+          .catch(() => null);
+
+        if (!youtubeResponse.ok) {
+          throw new Error(
+            isErrorResponse(youtubeData) && youtubeData.error
+              ? youtubeData.error
+              : "YouTube 검색 요청에 실패했습니다.",
+          );
+        }
+
+        if (!isYouTubeSearchResponse(youtubeData)) {
+          throw new Error("YouTube 응답 JSON 형식이 올바르지 않습니다.");
+        }
+
+        setQuery(youtubeData.query);
+        setResults(youtubeData.results);
+      } catch (requestError) {
+        setYoutubeError(
+          requestError instanceof Error
+            ? requestError.message
+            : "YouTube 검색 요청에 실패했습니다.",
+        );
+      } finally {
+        setIsYoutubeLoading(false);
+      }
+    } catch (requestError) {
+      setAiError(
+        requestError instanceof Error
+          ? requestError.message
+          : "키워드 생성 요청에 실패했습니다.",
+      );
+    } finally {
+      setIsAiLoading(false);
+    }
   }
+
+  const isSearching = isAiLoading || isYoutubeLoading;
+  const hasResultSection = Boolean(query || keywordResult);
 
   return (
     <main className="relative min-h-screen overflow-x-hidden">
@@ -106,32 +253,75 @@ export default function Home() {
             <button
               type="submit"
               aria-label="검색"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/80"
+              disabled={isSearching}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-black transition-colors hover:bg-white/80 disabled:cursor-not-allowed disabled:bg-white/60"
             >
-              →
+              {isSearching ? "..." : "→"}
             </button>
           </form>
 
-          {error && <p className="mt-4 text-sm text-red-200">{error}</p>}
+          {isAiLoading && (
+            <p className="mt-4 text-sm text-white/70">
+              검색어를 생성하는 중입니다.
+            </p>
+          )}
+
+          {aiError && <p className="mt-4 text-sm text-red-200">{aiError}</p>}
         </section>
 
-        {query && (
+        {hasResultSection && (
           <section className="w-full max-w-5xl px-6 pb-24">
-            <h2 className="text-left text-lg font-medium text-white sm:text-xl">
-              <span className="text-white/60">&ldquo;{query}&rdquo;</span>에
-              어울리는 음악
-            </h2>
+            {query && (
+              <h2 className="text-left text-lg font-medium text-white sm:text-xl">
+                <span className="text-white/60">&ldquo;{query}&rdquo;</span>에
+                어울리는 음악
+              </h2>
+            )}
 
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {MOCK_RESULTS.map((result) => (
-                <MusicResultCard key={result.id} {...result} />
-              ))}
-            </div>
+            {keywordResult && (
+              <details className="mt-4 text-left text-xs text-white/60">
+                <summary className="cursor-pointer text-white/70">
+                  AI 검색어 결과
+                </summary>
+                <div className="mt-2 space-y-1">
+                  <p>finalSearchQuery: {keywordResult.finalSearchQuery}</p>
+                  <p>
+                    youtubeKeywords: {keywordResult.youtubeKeywords.join(", ")}
+                  </p>
+                </div>
+              </details>
+            )}
+
+            {isYoutubeLoading && (
+              <p className="mt-6 text-left text-sm text-white/70">
+                YouTube 영상을 불러오는 중입니다.
+              </p>
+            )}
+
+            {youtubeError && (
+              <p className="mt-6 text-left text-sm text-red-200">
+                {youtubeError}
+              </p>
+            )}
+
+            {!isYoutubeLoading && !youtubeError && results.length === 0 && (
+              <p className="mt-6 text-left text-sm text-white/70">
+                검색된 영상이 없습니다.
+              </p>
+            )}
+
+            {results.length > 0 && (
+              <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {results.map((result) => (
+                  <MusicResultCard key={result.id} {...result} />
+                ))}
+              </div>
+            )}
           </section>
         )}
       </div>
 
-      {query && (
+      {hasResultSection && (
         <button
           type="button"
           aria-label="맨 위로 이동"
