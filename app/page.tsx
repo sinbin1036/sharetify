@@ -285,7 +285,9 @@ export default function Home() {
                 </summary>
                 <div className="mt-2 space-y-1">
                   <p>finalSearchQuery: {keywordResult.finalSearchQuery}</p>
-                  <p>youtubeKeywords: {keywordResult.youtubeKeywords.join(", ")}</p>
+                  <p>
+                    youtubeKeywords: {keywordResult.youtubeKeywords.join(", ")}
+                  </p>
                 </div>
               </details>
             )}
