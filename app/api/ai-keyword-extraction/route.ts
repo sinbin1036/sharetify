@@ -225,38 +225,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 502 });
     }
 
-    const rawResponse = extractResponseText(openAIData);
+    const modelResponseText = extractResponseText(openAIData);
 
     try {
-      const parsed: unknown = JSON.parse(rawResponse);
+      const parsed: unknown = JSON.parse(modelResponseText);
 
       if (!isKeywordExtractionResult(parsed)) {
-        console.error("Invalid AI JSON shape:", rawResponse);
-
         return NextResponse.json(
-          {
-            error: "AI 응답 JSON 형식이 올바르지 않습니다.",
-            rawResponse,
-          },
+          { error: "AI 응답 JSON 형식이 올바르지 않습니다." },
           { status: 502 },
         );
       }
 
       return NextResponse.json(parsed);
     } catch {
-      console.error("Invalid AI JSON response:", rawResponse);
-
       return NextResponse.json(
-        {
-          error: "AI 응답 JSON 형식이 올바르지 않습니다.",
-          rawResponse,
-        },
+        { error: "AI 응답 JSON 형식이 올바르지 않습니다." },
         { status: 502 },
       );
     }
-  } catch (error) {
-    console.error("AI keyword extraction failed:", error);
-
+  } catch {
     return NextResponse.json(
       { error: "키워드 생성 요청에 실패했습니다." },
       { status: 500 },

@@ -13,7 +13,6 @@ type KeywordExtractionResult = {
 
 type ErrorResponse = {
   error?: string;
-  rawResponse?: string;
 };
 
 function isStringArray(value: unknown): value is string[] {
@@ -46,15 +45,11 @@ function isErrorResponse(value: unknown): value is ErrorResponse {
 
   const data = value as Record<string, unknown>;
 
-  return (
-    typeof data.error === "string" ||
-    typeof data.rawResponse === "string"
-  );
+  return typeof data.error === "string";
 }
 
 export default function Home() {
   const [input, setInput] = useState("");
-  const [result, setResult] = useState<KeywordExtractionResult | null>(null);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -63,7 +58,6 @@ export default function Home() {
 
     const trimmedInput = input.trim();
     setError("");
-    setResult(null);
 
     if (!trimmedInput) {
       setError("상황을 입력해 주세요.");
@@ -84,10 +78,6 @@ export default function Home() {
       const data: unknown = await response.json().catch(() => null);
 
       if (!response.ok) {
-        if (isErrorResponse(data) && data.rawResponse) {
-          console.error("Raw AI response:", data.rawResponse);
-        }
-
         throw new Error(
           isErrorResponse(data) && data.error
             ? data.error
@@ -96,11 +86,8 @@ export default function Home() {
       }
 
       if (!isKeywordExtractionResult(data)) {
-        console.error("Invalid API response:", data);
         throw new Error("AI 응답 JSON 형식이 올바르지 않습니다.");
       }
-
-      setResult(data);
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -160,31 +147,6 @@ export default function Home() {
         )}
 
         {error && <p className="mt-4 text-sm text-red-200">{error}</p>}
-
-        {result && (
-          <section className="mt-6 max-h-96 w-full overflow-y-auto rounded-lg border border-white/20 bg-black/35 p-5 text-left text-white backdrop-blur-md">
-            <div>
-              <p className="text-xs uppercase text-white/50">Final Search Query</p>
-              <p className="mt-1 text-lg font-semibold">{result.finalSearchQuery}</p>
-            </div>
-
-            <div className="mt-4">
-              <p className="text-xs uppercase text-white/50">YouTube Keywords</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/85">
-                {result.youtubeKeywords.map((keyword, index) => (
-                  <li key={`${keyword}-${index}`}>{keyword}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="mt-4">
-              <p className="text-xs uppercase text-white/50">Debug JSON</p>
-              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-md bg-black/40 p-3 text-xs text-white/80">
-                {JSON.stringify(result, null, 2)}
-              </pre>
-            </div>
-          </section>
-        )}
       </div>
     </main>
   );
